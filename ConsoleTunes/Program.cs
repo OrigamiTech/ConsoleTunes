@@ -65,39 +65,49 @@ namespace ConsoleTunes
             Console.WriteLine(@"        ╚══════════════════════════════════════╩═══════════════════════╝");
             Console.WriteLine(@"                             Choose a file to load:");
             Console.WriteLine("");
+            if (!Directory.Exists(TUNE_DIR))
+                Directory.CreateDirectory(TUNE_DIR);
             List<string> files = Directory.GetFiles(TUNE_DIR, "*" + FILENAME_EXTENSION).ToList();
-            for (int i = 0; i < files.Count; i++)
+            if (files.Count != 0)
             {
-                files[i] = files[i].Substring(TUNE_DIR.Length, files[i].Length - TUNE_DIR.Length - FILENAME_EXTENSION.Length);
-                SetColors(i != 0);
-                Console.WriteLine((i == 0 ? MENU_ITEM_POINTER.ToString() : " ") + " " + files[i]);
-            }
-            files.Add(EXIT_ITEM);
-            Console.WriteLine("  " + EXIT_ITEM);
-            Console.CursorLeft = 0;
-            Console.CursorTop -= files.Count;
-            int CurrentMenuItem = 0;
-            bool UserHasChosen = false;
-            while (!UserHasChosen)
-            {
-                ConsoleKeyInfo cki = Console.ReadKey(true);
-                if ((cki.Key == ConsoleKey.UpArrow && CurrentMenuItem > 0) || (cki.Key == ConsoleKey.DownArrow && CurrentMenuItem < files.Count - 1))
+                for (int i = 0; i < files.Count; i++)
                 {
-                    Console.CursorLeft = 0;
-                    Console.Write("  " + files[CurrentMenuItem]);
-                    CurrentMenuItem += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
-                    Console.CursorTop += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
-                    Console.CursorLeft = 0;
-                    SetColors(false);
-                    Console.Write(MENU_ITEM_POINTER.ToString() + " " + files[CurrentMenuItem]);
-                    SetColors();
-                    Console.CursorLeft = 0;
+                    files[i] = files[i].Substring(TUNE_DIR.Length, files[i].Length - TUNE_DIR.Length - FILENAME_EXTENSION.Length);
+                    SetColors(i != 0);
+                    Console.WriteLine((i == 0 ? MENU_ITEM_POINTER.ToString() : " ") + " " + files[i]);
                 }
-                UserHasChosen = (cki.Key == ConsoleKey.Enter);
+                files.Add(EXIT_ITEM);
+                Console.WriteLine("  " + EXIT_ITEM);
+                Console.CursorLeft = 0;
+                Console.CursorTop -= files.Count;
+                int CurrentMenuItem = 0;
+                bool UserHasChosen = false;
+                while (!UserHasChosen)
+                {
+                    ConsoleKeyInfo cki = Console.ReadKey(true);
+                    if ((cki.Key == ConsoleKey.UpArrow && CurrentMenuItem > 0) || (cki.Key == ConsoleKey.DownArrow && CurrentMenuItem < files.Count - 1))
+                    {
+                        Console.CursorLeft = 0;
+                        Console.Write("  " + files[CurrentMenuItem]);
+                        CurrentMenuItem += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
+                        Console.CursorTop += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
+                        Console.CursorLeft = 0;
+                        SetColors(false);
+                        Console.Write(MENU_ITEM_POINTER.ToString() + " " + files[CurrentMenuItem]);
+                        SetColors();
+                        Console.CursorLeft = 0;
+                    }
+                    UserHasChosen = (cki.Key == ConsoleKey.Enter);
+                }
+                Console.CursorTop += (files.Count - CurrentMenuItem) + 1;
+                if (CurrentMenuItem != files.Count - 1)
+                    LoadFile(TUNE_DIR + files[CurrentMenuItem] + FILENAME_EXTENSION);
             }
-            Console.CursorTop += (files.Count - CurrentMenuItem) + 1;
-            if (CurrentMenuItem != files.Count - 1)
-                LoadFile(TUNE_DIR + files[CurrentMenuItem] + FILENAME_EXTENSION);
+            else
+            {
+                Console.WriteLine("No tunes detected. Press any key to exit.");
+                Console.ReadKey();
+            }
         }
 
         static void LoadFile(string filePath)
@@ -174,14 +184,11 @@ namespace ConsoleTunes
             {
                 case EventType.Note:
                     Note currNote = (Note)Ev.Argument;
-                    //Console.WriteLine(currNote.Frequency + "," + currNote.Duration);
                     if (Console.CursorLeft > 0)
                         Console.CursorLeft--;
                     Console.Write(CHAR_STRING);
                     if (currNote.Fret == 0 && currNote.Strings == 0)
-                    {
-                        Console.SetCursorPosition((int)(currNote.Frequency % Console.WindowWidth), (int)(currNote.Duration % Console.WindowHeight));
-                    }
+                        Console.SetCursorPosition((int)((Math.Log(currNote.Frequency, Math.E) * 100) % Console.WindowWidth), (int)(currNote.Duration % Console.WindowHeight));
                     else
                         Console.SetCursorPosition(currNote.Fret, currNote.Strings);
                     Console.Write('O');
@@ -213,17 +220,6 @@ namespace ConsoleTunes
                     else if (s.Length > 0 && !s.StartsWith("//"))
                         throw new Exception();
                 }
-
-                /*else if (s.ToLower().StartsWith("dropd"))
-                    StringFreqs[5] = 73.42;
-
-                else if (s.ToLower().StartsWith("#"))
-                    SectionTitle = s.Substring(1, s.Length - 1);
-
-                else if (s.ToLower().StartsWith("//"))
-                    CurrentMeasure = s.Substring(2, s.Length - 2);
-
-                Console.Title = SectionTitle + " - " + CurrentMeasure;*/
                 return true;
             }
             catch
