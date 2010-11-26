@@ -1,0 +1,5 @@
+ConsoleTunes/bin/Debug/Tunes/Through the Fire and Flames.ct
+ConsoleTunes/bin/Debug/*.exe
+ConsoleTunes/bin/Debug/*.pdb
+ConsoleTunes/bin/Release/*
+ConsoleTunes/obj/*
