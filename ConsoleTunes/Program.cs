@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 
 namespace ConsoleTunes
 {
@@ -39,7 +40,8 @@ namespace ConsoleTunes
             DURATION_TRIPLET_CROTCHET = 2d / 3d,
             DURATION_TRIPLET_QUAVER = 1d / 3d,
             DURATION_TRIPLET_SEMIQUAVER = 1d / 6d,
-            DURATION_TRIPLET_DEMISEMIQUAVER = 1d / 12d;
+            DURATION_TRIPLET_DEMISEMIQUAVER = 1d / 12d,
+            SEMITONE_INTERVAL = 1.05946309d;    // Will be used to generate a lookup table in future.
 
         static void Main(string[] args)
         {
@@ -157,8 +159,8 @@ namespace ConsoleTunes
             {
                 switch (Ev.Type)
                 {
-                    case EventType.Note:
-                        Note currNote = (Note)Ev.Argument;
+                    case EventType.TabNote:
+                        TabNote currNote = (TabNote)Ev.Argument;
                         RenderEvent(Ev);
                         Console.Beep((int)currNote.Frequency, (int)((currNote.Duration * 60000d) / BaseTempo));
                         break;
@@ -182,8 +184,8 @@ namespace ConsoleTunes
         {
             switch (Ev.Type)
             {
-                case EventType.Note:
-                    Note currNote = (Note)Ev.Argument;
+                case EventType.TabNote:
+                    TabNote currNote = (TabNote)Ev.Argument;
                     if (Console.CursorLeft > 0)
                         Console.CursorLeft--;
                     Console.Write(CHAR_STRING);
@@ -209,8 +211,14 @@ namespace ConsoleTunes
                 else
                 {
                     s = s.Replace(" ", "");
-                    if (Regex.Match(s, @"^b\(\d+,\d+,.+\);$").Success)
-                        Events.Add(new Event(EventType.Note, GetNote(s)));
+                    if (Regex.Match(s, @"^tn\(\d+,\d+,.+\);$").Success)
+                        Events.Add(new Event(EventType.TabNote, GetTabNote(s)));
+                    /*
+                    else if (Regex.Match(s, @"^sn\([a-g](s|b)?\d,.+\);$").Success)
+                        Events.Add(new Event(EventType.TabNote, GetScaleNote(s)));
+                     */
+                    else if (Regex.Match(s, @"^fn\(\d+(\.\d+)?,.+\);$").Success)
+                        Events.Add(new Event(EventType.TabNote, GetFreqNote(s)));
                     else if (Regex.Match(s, @"^r\(.+\);$").Success)
                         Events.Add(new Event(EventType.Rest, GetRest(s)));
                     else if (Regex.Match(s, @"^t\(\d+\);$").Success)
@@ -252,18 +260,26 @@ namespace ConsoleTunes
                         case EventType.ColorChange:
                             Events.Add(new Event(eventType, ms.ReadByte()));
                             break;
-                        case EventType.Note:
+                        case EventType.FreqNote:
                             byte[]
-                                noteFrequencyBytes = new byte[8],
-                                noteDurationBytes = new byte[8];
+                                fnFrequencyBytes = new byte[8],
+                                fnDurationBytes = new byte[8];
                             for (int i = 0; i < 8; i++)
-                                noteFrequencyBytes[i] = (byte)ms.ReadByte();
+                                fnFrequencyBytes[i] = (byte)ms.ReadByte();
                             for (int i = 0; i < 8; i++)
-                                noteDurationBytes[i] = (byte)ms.ReadByte();
+                                fnDurationBytes[i] = (byte)ms.ReadByte();
                             double
-                                noteFrequency = BitConverter.ToDouble(noteFrequencyBytes, 0),
-                                noteDuration = BitConverter.ToDouble(noteDurationBytes, 0);
-                            Events.Add(new Event(eventType, new Note(noteDuration, noteFrequency, 0, 0)));
+                                fnFrequency = BitConverter.ToDouble(fnFrequencyBytes, 0),
+                                fnDuration = BitConverter.ToDouble(fnDurationBytes, 0);
+                            Events.Add(new Event(eventType, new FreqNote(fnFrequency, fnDuration)));
+                            break;
+                        case EventType.TabNote:
+                            byte tnData = (byte)ms.ReadByte();
+                            byte[] tnDurationBytes = new byte[8];
+                            for (int i = 0; i < 8; i++)
+                                tnDurationBytes[i] = (byte)ms.ReadByte();
+                            double tnDuration = BitConverter.ToDouble(tnDurationBytes, 0);
+                            Events.Add(new Event(eventType, new TabNote((tnData >> 3) & 0x1F, tnData & 0x07, tnDuration)));
                             break;
                         case EventType.Rest:
                             byte[] restDurationBytes = new byte[8];
@@ -292,6 +308,11 @@ namespace ConsoleTunes
                 }
             }
             return true;
+        }
+        static string[] GetParams(string call)
+        {
+            call = call.Substring(call.IndexOf("(") + 1, call.IndexOf(")") - call.IndexOf("(") - 1);
+            return call.Split(',');
         }
         #endregion
 
@@ -325,6 +346,65 @@ namespace ConsoleTunes
                 this._Strings = strings;
             }
         }
+        private class TabNote
+        {
+            private double
+                _Duration = DURATION_CROTCHET,
+                _Frequency = 440;
+            private int
+                _Strings,
+                _Fret;
+            public double Frequency { get { return _Frequency; } }
+            public double Duration { get { return _Duration; } }
+            public int Strings { get { return _Strings; } set { _Strings = value; Recalc(); } }
+            public int Fret { get { return _Fret; } set { _Fret = value; Recalc(); } }
+            public TabNote(int fret, int strings, double duration)
+            {
+                this._Duration = duration;
+                this._Fret = fret;
+                this._Strings = strings;
+                Recalc();
+            }
+            private void Recalc()
+            {
+                _Frequency = GetFrequency(_Fret, _Strings);
+            }
+        }
+        // Will implement this soon. 
+        // This will allow specifying notes as SN(Cs5,crotchet);, for example.
+        /*
+        private class ScaleNote
+        {
+            private double
+                _Duration = DURATION_CROTCHET,
+                _Frequency = 440;
+            public ScaleNote(double duration)
+            {
+                this._Duration = duration;
+            }
+        }
+         */
+        private class FreqNote
+        {
+            private double
+                _Duration = DURATION_CROTCHET,
+                _Frequency = 440;
+            public double Duration
+            {
+                get { return _Duration; }
+                set { _Duration = value; }
+            }
+            public double Frequency
+            {
+                get { return _Frequency; }
+                set { _Frequency = value; }
+            }
+            public FreqNote(double frequency, double duration)
+            {
+                this._Frequency = frequency;
+                this._Duration = duration;
+            }
+        }
 
         private class Event
         {
@@ -338,11 +418,13 @@ namespace ConsoleTunes
         }
         enum EventType : byte
         {
-            Note = 0x00,
+            FreqNote = 0x00,
             Rest = 0x01,
             TempoChange = 0x02,
             ColorChange = 0x03,
-            Message = 0x04
+            Message = 0x04,
+            ScaleNote = 0x05,
+            TabNote = 0x06
         }
 
         #endregion
@@ -351,10 +433,32 @@ namespace ConsoleTunes
 
         static Note GetNote(string s)
         {
-            int fret = int.Parse(s.Substring(s.IndexOf("(") + 1, s.IndexOf(",") - s.IndexOf("(") - 1));
-            int strings = int.Parse(s.Substring(s.IndexOf(",") + 1, s.LastIndexOf(",") - s.IndexOf(",") - 1));
-            string duration = s.Substring(s.LastIndexOf(",") + 1, s.IndexOf(")") - s.LastIndexOf(",") - 1);
+            string[] noteParams = GetParams(s);
+            int fret = int.Parse(noteParams[0]);
+            int strings = int.Parse(noteParams[1]);
+            string duration = noteParams[2];
             return new Note(GetDuration(duration), GetFrequency(fret, strings), fret, strings);
+        }
+        static TabNote GetTabNote(string s)
+        {
+            string[] noteParams = GetParams(s);
+            int fret = int.Parse(noteParams[0]);
+            int strings = int.Parse(noteParams[1]);
+            string duration = noteParams[2];
+            return new TabNote(fret, strings, GetDuration(duration));
+        }
+        /*
+        static ScaleNote GetScaleNote(string s)
+        {
+         
+        }
+         */
+        static FreqNote GetFreqNote(string s)
+        {
+            string[] noteParams = GetParams(s);
+            double frequency = double.Parse(noteParams[0]);
+            string duration = noteParams[1];
+            return new FreqNote(frequency, GetDuration(duration));
         }
 
         static double GetRest(string s)
