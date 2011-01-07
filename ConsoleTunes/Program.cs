@@ -87,12 +87,31 @@ namespace ConsoleTunes
                 while (!UserHasChosen)
                 {
                     ConsoleKeyInfo cki = Console.ReadKey(true);
-                    if ((cki.Key == ConsoleKey.UpArrow && CurrentMenuItem > 0) || (cki.Key == ConsoleKey.DownArrow && CurrentMenuItem < files.Count - 1))
+                    if ((cki.Key == ConsoleKey.UpArrow && CurrentMenuItem > 0) || (cki.Key == ConsoleKey.DownArrow && CurrentMenuItem < files.Count - 1) || cki.Key == ConsoleKey.Home || cki.Key == ConsoleKey.End)
                     {
                         Console.CursorLeft = 0;
                         Console.Write("  " + files[CurrentMenuItem]);
-                        CurrentMenuItem += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
-                        Console.CursorTop += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
+                        switch (cki.Key)
+                        {
+                            case ConsoleKey.UpArrow:
+                                CurrentMenuItem--;
+                                Console.CursorTop--;
+                                break;
+                            case ConsoleKey.DownArrow:
+                                CurrentMenuItem++;
+                                Console.CursorTop++;
+                                break;
+                            case ConsoleKey.Home:
+                                Console.CursorTop -= CurrentMenuItem;
+                                CurrentMenuItem = 0;
+                                break;
+                            case ConsoleKey.End:
+                                Console.CursorTop += files.Count - 1 - CurrentMenuItem;
+                                CurrentMenuItem = files.Count - 1;
+                                break;
+                        }
+                        //CurrentMenuItem += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
+                        //Console.CursorTop += (cki.Key == ConsoleKey.UpArrow ? -1 : 1);
                         Console.CursorLeft = 0;
                         SetColors(false);
                         Console.Write(MENU_ITEM_POINTER.ToString() + " " + files[CurrentMenuItem]);
